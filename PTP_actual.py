@@ -115,9 +115,10 @@ import socket
 import sys
 
 
-class client():
-    gl_dict_clients = {}
-        
+global gl_dict_clients # Глобальный список подключенных соединений
+gl_dict_clients = {}
+
+class client():  
     str_ip : str
     int_port : int
     sock : socket.socket
@@ -126,12 +127,14 @@ class client():
         print('='*10)
         print(f'{self.str_ip} - {self.int_port}')
         print(self.sock)
+        print('='*10)
         
         
     def show_clients_socket_info(self):
-        list_keys = list(self.gl_dict_clients)
+        global gl_dict_clients
+        list_keys = list(gl_dict_clients)
         for i in range(len(list_keys)):
-            self.gl_dict_clients[list_keys[i]].info()
+            gl_dict_clients[list_keys[i]].info()
     
     
     def __init__(self, str_IP_to_connect, int_port_to_connect, int_mode=1, connected_socket=''):
@@ -145,12 +148,14 @@ class client():
             self.str_ip = str_IP_to_connect
             self.int_port = int_port_to_connect
             self.sock = connected_socket
-            client.gl_dict_clients[self.str_ip] = self
+            gl_dict_clients[self.str_ip] = self
     
     def write_to(self):
+        # self.info()
+        # global gl_dict_clients
         # print(self.sock, "4444")
-        print(self.gl_dict_clients)
-        self.show_clients_socket_info()
+        # print(gl_dict_clients)
+        # self.show_clients_socket_info()
         str_data = ''
         while str_data != '-c': # минус с (на РУССКОМ)
             str_data = input(f"Write to {self.str_ip} on {self.int_port}: ")
@@ -162,25 +167,20 @@ class client():
         print(f'{self.str_ip} is listening now !')
         self.info()
         while True:
-            try:
-                str_content = self.sock.recv(1024).decode()
+            str_content = self.sock.recv(1024).decode()
                 
-                if str_content:
-                    print(f'Message from {self.str_ip}: {str_content}')
-                    if str_content == '-с':
-                        self.sock.close()
-                        print(f" User {self.str_ip} break the connection.")
-                        break
-                        sys.exit()
-                else:
-                    continue
-            except Exception:
-                # print('pass')
+            if str_content:
+                print(f'Message from {self.str_ip}: {str_content}')
+                if str_content == '-с':
+                    self.sock.close()
+                    print(f" User {self.str_ip} break the connection.")
+                    break
+                    sys.exit()
+            else:
                 continue
-        
-        
-    
+
     def th_call_to_client(self):
+        global gl_dict_clients
         print('Start colling...')
         
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -198,20 +198,23 @@ class client():
 
                 self.sock = sock
                 bool_connection_stat = True
-                print(self.sock , '=', sock)
-                self.info()
+                # print(self.sock , '=', sock)
+                # self.info()
                 
                 
-
-                client.gl_dict_clients[self.str_ip] = self
+                # print(self)
+                
+                gl_dict_clients[self.str_ip] = self
+                
+                gl_dict_clients[self.str_ip].info()
                 
                 print(f'Connected to {self.str_ip} on {self.int_port}.')
                 thread_reception = Thread(target=self.th_reception_messages, args=(), daemon=False)
                 thread_reception.start()
                 
-                print(self.sock, "2222")
-                print(self.gl_dict_clients)
-                sock.close()
+                # print(self.sock, "2222")
+                # print(gl_dict_clients)
+                # sock.close() # Как бы закрывает сокет, но не тот
                 sys.exit()
                 
             except Exception:
@@ -256,11 +259,11 @@ class listener():
                 bool_connection_stat = True
                 print(f'Connected with {list_client_info[0]} by port {list_client_info[1]}')
                       
-                client.gl_dict_clients[list_client_info[0]] = client(list_client_info[0], list_client_info[1], 2, new_socket)
+                gl_dict_clients[list_client_info[0]] = client(list_client_info[0], list_client_info[1], 2, new_socket)
                 sock.close()
                 
-                # thread_listening = Thread(target=self.eternal_listen, args = (), daemon=False)
-                # thread_listening.start()
+                thread_listening = Thread(target=self.eternal_listen, args = (), daemon=False)
+                thread_listening.start()
                 
             except Exception:
                 # print('error')
@@ -272,14 +275,15 @@ class listener():
 
 
 def make_open_chat():
-    
+    global gl_dict_clients
     listener()
 
     str_input_command = ''
-
+    print(gl_dict_clients)
+    
     while str_input_command != '-с':
-        for i in range(  len( list(client.gl_dict_clients) )  ):
-            print(i+1, '. ',  client.gl_dict_clients[ list(client.gl_dict_clients)[i] ].info, sep='')
+        for i in range(  len( list(gl_dict_clients) )  ):
+            print(i+1, '. ', gl_dict_clients[ list(gl_dict_clients)[i] ].info, sep='')
         
         
         str_input_command = str(input('Введете указание : '))
@@ -294,7 +298,7 @@ def make_open_chat():
         # напиши -192.168.137.180 # напиши -192.168.0.11
         elif re.search('напиши -', str_input_command):
             str_IP_to_write = (str_input_command.split('-')[1])
-            client.gl_dict_clients[str_IP_to_write].write_to()
+            gl_dict_clients[str_IP_to_write].write_to()
 
     #     # закрой соединение с -192.168.137.180
     #     elif re.search('закрой соединение с -', str_input_command):
