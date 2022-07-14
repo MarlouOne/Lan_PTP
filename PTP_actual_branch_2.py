@@ -112,43 +112,92 @@ def get_self_info_in_dict(): # Взвращает словарь даннах о
 ##############################################################################
 from threading import Thread, Event
 import socket
-import sys
 
 
 # global gl_dict_clients # Глобальный список подключенных соединений
 # gl_dict_clients = {}
 
 def get_self_ip():
-    # global gl_dict_main_self_info 
-    return client.gl_dict_main_self_info['self_ip']
+    global gl_dict_main_self_info 
+    return gl_dict_main_self_info['self_ip']
 
 class client():
     gl_dict_clients = {}
     str_ip : str
     int_port : int
+    bool_exist = True
     main_sock : socket.socket
     mirror_sock : socket.socket
     
+    def info(self):
+        print('='*10)
+        print(f'{self.str_ip} - {self.int_port}')
+        print(self.sock)
+        print('='*10)
     
-    def __int__(self,str_ip, int_port, int_mode, new_socket = ""):
+    def __init__(self,str_ip, int_port, int_mode = 1, new_socket = ""):
         
-        if int_mode == 1: # Если мы звоним
+        if int_mode == 1: # Если мы звоним - мы можем только принимать сообщения 
             self.str_ip    = str_ip
             self.int_port  = int_port 
-            self.main_sock = new_socket 
-            thread_calling = Thread(target=self.th_call_to_client, args = (), daemon=False)
+            # self.main_sock = new_socket 
+            thread_calling = Thread(target=self.th_call_to_client, args = (int_mode,), daemon=False)
+            thread_calling.start()
+                
+        elif int_mode == 2: # Если нам звонят - мы можем только отправлять сообщения
+            self.str_ip = str_ip
+            self.int_port = int_port
+        
+            self.mirror_sock = new_socket
+            thread_calling = Thread(target=self.th_call_to_client, args = (int_mode,), daemon=False)
             thread_calling.start()
         
-        
-        
-        elif int_mode == 2: # Если нам звонят
-            pass
     
-    def th_call_to_client(self):
+    def write_to(self): # Работает с mirror_sock
+        str_data = ''
+        while str_data != '-c': # минус с (на РУССКОМ)
+            str_data = input(f"Write to {self.str_ip} on {self.int_port}: ")
+            # print(type(self.mirror_sock))
+            # print(self.mirror_sock, "3333")
+            self.mirror_sock.sendall(str_data.encode())
+            
+    def th_reception_messages(self): # Работает с main_sock
+        # print(f'{self.str_ip} is listening now !')
+        # self.info()
+        while self.bool_exist == True:
+            str_content = self.main_sock.recv(1024).decode()
+                
+            if str_content:
+                print(f'Message from {self.str_ip}: {str_content}')
+                if str_content == '-end':
+                    self.main_sock.close()
+                    print(f" User {self.str_ip} break the connection.")
+                    break
+                    sys.exit()
+            else:
+                continue
+    
+    def get_main_socket_port(self):
+        line = str(self.mirror_sock)
+        int_left = str(line).index('laddr')+5
+        int_right = int_left + 23
+        # int_port = int(line[int_left:int_right][-5:])
+        
+        return int(line[int_left:int_right][-5:]) + 1
+    
+    def get_mirror_socket_port(self):
+        line = str(self.main_sock)
+        int_left = str(line).index('raddr')+5
+        int_right = int_left + 23
+        # int_port = int(line[int_left:int_right][-5:])
+        
+        return int(line[int_left:int_right][-5:]) + 1
+    
+    def th_call_to_client(self, int_mode = 1):
         print('Start colling...')
         
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.main_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.main_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
         bool_connection_stat = False
         int_try_counter = 0
@@ -158,16 +207,61 @@ class client():
         while bool_connection_stat == False or int_try_counter != 4: # В случае если мы не смогли подключится или подключились
 
             try:
-                sock.connect( (self.str_ip, self.int_port) )
 
-                self.sock = sock
-                bool_connection_stat = True
+                if int_mode != 1:
+                    print(self.get_main_socket_port())
+                    self.main_sock.connect( (self.str_ip, self.get_main_socket_port()) )
+                    print(f'Tolking with {self.str_ip} on {self.get_main_socket_port()}.')
+                else:
+                    self.main_sock.connect( (self.str_ip, self.int_port) )
+                
+                # print(self.main_sock)
+                
+                # self.main_sock = sock
+                # bool_connection_stat = True
+                
+                # client.gl_dict_clients[self.str_ip].info()
+                
+                print(f'Listening to {self.str_ip} on {self.int_port}.')
+                
+                if int_mode == 1:
+                    print(f'Try to make "talking connection" {self.str_ip} on {self.get_mirror_socket_port()}...')
+                    while bool_connection_stat == False:
+                        try:
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                                    
+                                    
+                            server_address = (get_self_ip(), self.get_mirror_socket_port() )
+                                    
+                            
+                            sock.bind(server_address)
+                            sock.listen(1)  
+                            
+                            print('+'*10)
+                            # print(self.main_sock)
+                            # print(self.mirror_sock)
+                            print(sock)
+                            print(server_address)
+                            print(self.get_mirror_socket_port())
+                            print('+'*10)
+                            
+                            
+                            
+                            
+                            self.mirror_sock , list_client_info = sock.accept()
+                            print(f'Tolking with {self.str_ip} on {self.get_mirror_socket_port()}.')
+                            bool_connection_stat == False
+                            break
+                            
+                        except Exception:
+                            # print('error')
+                            continue
+                    
+                # print('rrrr')
                 
                 client.gl_dict_clients[self.str_ip] = self
                 
-                client.gl_dict_clients[self.str_ip].info()
-                
-                print(f'Connected to {self.str_ip} on {self.int_port}.')
                 thread_reception = Thread(target=self.th_reception_messages, args=(), daemon=False)
                 thread_reception.start()
 
@@ -181,7 +275,14 @@ class client():
         sock.close()
         sys.exit()
 
+    def show_clients_socket_info(self):
+        global gl_dict_clients
+        list_keys = list(gl_dict_clients)
+        for i in range(len(list_keys)):
+            gl_dict_clients[list_keys[i]].info()
+
 class listener():
+    bool_flag_to_listen = True
     static_int_port_to_connect = 10000
     
     def __init__(self):
@@ -198,11 +299,13 @@ class listener():
     
         sock.bind(server_address)
         sock.listen(1)  
+        bool_connection_stat = False    
 
-        while True:
+        while bool_connection_stat == False:
             try:
                 print('Ready for get connection.')
                 new_socket, list_client_info = sock.accept()
+                bool_connection_stat = True
                 print(f'Connected with {list_client_info[0]} by port {list_client_info[1]}')
                       
                 client.gl_dict_clients[list_client_info[0]] = client(list_client_info[0], list_client_info[1], 2, new_socket)
@@ -238,9 +341,10 @@ def make_open_chat():
         if re.search('соедини с -', str_input_command):
             str_IP_to_connect = (str_input_command.split('-')[1])
             client(str_IP_to_connect, 10000)
+            # client()
         
         elif re.search('покажи список клиентов', str_input_command):
-            client.show_clients_socket_info()
+            print(client.gl_dict_clients)
             
         # напиши -192.168.137.180 # напиши -192.168.0.11
         elif re.search('напиши -', str_input_command):

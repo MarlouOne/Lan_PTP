@@ -219,7 +219,7 @@ class client():
                 
                 gl_dict_clients[self.str_ip] = self
                 
-                gl_dict_clients[self.str_ip].info()
+                # gl_dict_clients[self.str_ip].info()
                 
                 print(f'Connected to {self.str_ip} on {self.int_port}.')
                 thread_reception = Thread(target=self.th_reception_messages, args=(), daemon=False)
